@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Sudoku Solver (2x2)</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .solution-grid {
+            margin: 10px 0;
+            display: inline-block;
+        }
+        .solution-grid .row {
+            display: flex;
+            gap: 5px;
+        }
+        .solution-grid .cell {
+            width: 60px;
+            height: 60px;
+            font-size: 20px;
+            text-align: center;
+            border: 2px solid #ffffff;
+            border-radius: 5px;
+            background: #d1fae5;
+            color: #000000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Quantum Sudoku Solver (2x2)</h1>
+        <div class="grid-container" id="sudoku-grid">
+            {% for i in range(2) %}
+                <div class="row">
+                    {% for j in range(2) %}
+                        <input type="text" class="cell" id="cell-{{ i }}-{{ j }}" maxlength="1" value="">
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+        <div class="controls">
+            <button class="quantum-btn" onclick="solveSudoku()">Solve with Quantum</button>
+            <button class="reset-btn" onclick="resetGrid()">Reset Input</button>
+            <label class="circuit-toggle"><input type="checkbox" id="show-circuit"> Show Quantum Circuit</label>
+        </div>
+        <div class="progress" id="progress-bar" style="display: none;">
+            <div class="progress-bar"></div>
+        </div>
+        <div class="circuit" id="circuit-display"></div>
+        <div id="solution-display"></div>
+        <div class="message" id="message"></div>
+    </div>
+    <script>
+        function getGrid() {
+            let grid = {};
+            for (let i = 0; i < 2; i++) {
+                grid[i] = {};
+                for (let j = 0; j < 2; j++) {
+                    let val = document.getElementById(`cell-${i}-${j}`).value;
+                    grid[i][j] = val || "";
+                }
+            }
+            return grid;
+        }
+
+        function updateGrid(solutions) {
+            const display = document.getElementById('solution-display');
+            display.innerHTML = '';
+            solutions.forEach((solution, index) => {
+                const gridDiv = document.createElement('div');
+                gridDiv.className = 'solution-grid';
+                gridDiv.innerHTML = `<h3>Solution ${index + 1}</h3>`;
+                for (let i = 0; i < 2; i++) {
+                    const rowDiv = document.createElement('div');
+                    rowDiv.className = 'row';
+                    for (let j = 0; j < 2; j++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell';
+                        cell.textContent = solution[i][j];
+                        rowDiv.appendChild(cell);
+                    }
+                    gridDiv.appendChild(rowDiv);
+                }
+                display.appendChild(gridDiv);
+            });
+            // Update input grid with first solution for visual feedback
+            for (let i = 0; i < 2; i++) {
+                for (let j = 0; j < 2; j++) {
+                    document.getElementById(`cell-${i}-${j}`).value = solutions[0][i][j];
+                    document.getElementById(`cell-${i}-${j}`).classList.add('solved');
+                }
+            }
+        }
+
+        function showProgress(show) {
+            document.getElementById('progress-bar').style.display = show ? 'block' : 'none';
+        }
+
+        function showMessage(msg, isError = false) {
+            const message = document.getElementById('message');
+            message.textContent = msg;
+            message.className = isError ? 'error' : 'success';
+            setTimeout(() => message.textContent = '', 3000);
+        }
+
+        function solveSudoku() {
+            showProgress(true);
+            fetch('/solve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(getGrid())
+            })
+            .then(response => response.json())
+            .then(data => {
+                showProgress(false);
+                if (data.success) {
+                    updateGrid(data.solutions);
+                    if (document.getElementById('show-circuit').checked) {
+                        fetch('/circuit')
+                            .then(response => response.blob())
+                            .then(blob => {
+                                const url = URL.createObjectURL(blob);
+                                document.getElementById('circuit-display').innerHTML = `<img src="${url}" alt="Quantum Circuit" style="max-width: 100%;">`;
+                            });
+                    } else {
+                        document.getElementById('circuit-display').innerHTML = '';
+                    }
+                    showMessage('Sudoku solved with multiple solutions!');
+                } else {
+                    showMessage(data.message, true);
+                }
+            })
+            .catch(error => {
+                showProgress(false);
+                showMessage('Error solving Sudoku.', true);
+                console.error('Error:', error);
+            });
+        }
+
+        function resetGrid() {
+            fetch('/reset', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                for (let i = 0; i < 2; i++) {
+                    for (let j = 0; j < 2; j++) {
+                        document.getElementById(`cell-${i}-${j}`).value = '';
+                        document.getElementById(`cell-${i}-${j}`).classList.remove('solved');
+                    }
+                }
+                document.getElementById('circuit-display').innerHTML = '';
+                document.getElementById('solution-display').innerHTML = '';
+                showMessage('Grid reset!');
+            });
+        }
+
+        document.querySelectorAll('.cell').forEach(cell => {
+            cell.addEventListener('focus', () => cell.classList.add('focused'));
+            cell.addEventListener('blur', () => cell.classList.remove('focused'));
+        });
+    </script>
+</body>
+</html>
